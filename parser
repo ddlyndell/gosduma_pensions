@@ -1,0 +1,37 @@
+import requests, re
+import pandas as pd
+from bs4 import BeautifulSoup
+
+root = 'http://duma.gov.ru'
+deps = '/duma/deputies/'
+dates = [('января', '01'), ('февраля', '02'), ('марта', '03'), 
+         ('апреля', '04'), ('мая', '05'), ('июня', '06'), 
+         ('июля', '07'), ('августа', '08'), ('сентября', '09'), 
+         ('октября', '10'), ('ноября', '11'), ('декабря', '12') ]
+         
+def get_date(line):
+    simplify = re.search('([0-9]{1,2})( [а-я]+ )([0-9]{4})', line)
+    if len(simplify[1]) == 1:
+        day = '0' + simplify[1]
+    else:
+        day = simplify[1]
+    for a, b in dates:
+        if a in simplify[2]:
+            date = '%s.%s.%s' % (day, b, simplify[3])
+    return date
+
+def collect_persons():
+    res = []
+    page = BeautifulSoup(requests.get(root + deps).text, 'lxml').find_all('a', itemprop = 'url')
+    for i, person in enumerate(page):
+        if i % 2 == 0:
+            pers_page = BeautifulSoup(requests.get(root +  person['href']).text, 'lxml')
+            date_line = pers_page.find('div', class_ = 'content--s').div.p.text
+            date = get_date(date_line)
+            res.append({'url' : person['href'], 'name' : person.img['alt'], 'birthday' : date})
+    return res
+
+def save_file():
+    persons = collect_persons()
+    df = pd.DataFrame(persons)
+    df.to_csv('Дни рождения депутатов.csv', index = False)
